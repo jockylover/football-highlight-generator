@@ -1,0 +1,38 @@
+# --- Model weights (exceed GitHub's 100 MB file limit) ---
+*.pth
+*.pt
+*.ckpt
+model/clip_finetuned
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# --- Node / React frontend ---
+node_modules/
+app/frontend/build/
+app/frontend/node_modules/
+
+# --- Runtime data: uploads, generated outputs, logs ---
+app/uploads/
+app/outputs/
+app/logs/
+app/frontend/uploads/
+app/frontend/download/
+
+# --- Generated media & plots ---
+*.mp4
+*.mkv
+*.avi
+*.mov
+*.wmv
+
+# --- OS / editor cruft ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
