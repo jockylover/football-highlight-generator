@@ -1,0 +1,23 @@
+# 深度学习
+torch>=2.0
+# OpenAI CLIP（不在 PyPI，需从 GitHub 安装）：
+#   pip install git+https://github.com/openai/CLIP.git
+clip @ git+https://github.com/openai/CLIP.git
+
+# 视觉 / 视频处理（另需系统安装 ffmpeg 与 ffprobe 并加入 PATH）
+opencv-python>=4.5
+ffmpeg-python>=0.2
+Pillow>=9.0
+
+# 数据
+SoccerNet>=0.1.0
+
+# 训练 / 评估 / 可视化
+numpy>=1.21
+scikit-learn>=1.0
+matplotlib>=3.4
+seaborn>=0.11
+
+# Web 后端
+Flask>=2.0
+Flask-Cors>=3.0

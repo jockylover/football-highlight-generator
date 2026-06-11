@@ -53,19 +53,21 @@ function App() {
         }
     };
 
-    // 文件验证
+    // 文件验证（按扩展名校验，与后端 ALLOWED_EXTENSIONS 对齐；
+    // 部分浏览器对 mkv/wmv 的 file.type 为空，用 MIME 判断会误拒）
     const validateFile = (file) => {
         const maxSize = 1024 * 1024 * 1024; // 1GB
-        const allowedTypes = ['video/mp4', 'video/avi', 'video/mov', 'video/quicktime'];
-        
+        const allowedExtensions = ['mp4', 'avi', 'mov', 'mkv', 'wmv'];
+        const ext = file.name.split('.').pop().toLowerCase();
+
         if (file.size > maxSize) {
             return '文件大小超过1GB限制';
         }
-        
-        if (!allowedTypes.includes(file.type)) {
-            return '不支持的文件格式，请上传MP4、AVI或MOV格式';
+
+        if (!allowedExtensions.includes(ext)) {
+            return '不支持的文件格式，请上传 MP4、AVI、MOV、MKV 或 WMV 格式';
         }
-        
+
         return null;
     };
 
@@ -240,7 +242,7 @@ function App() {
                             ref={fileInputRef}
                             type="file"
                             onChange={(e) => handleFileChange(e.target.files[0])}
-                            accept="video/mp4,video/avi,video/mov,video/quicktime"
+                            accept=".mp4,.avi,.mov,.mkv,.wmv,video/*"
                             className="file-input"
                         />
 
@@ -269,7 +271,7 @@ function App() {
                                     <strong>点击选择</strong> 或 <strong>拖拽视频文件</strong> 到此处
                                 </div>
                                 <div className="upload-hint">
-                                    支持格式: MP4, AVI, MOV | 最大: 1GB
+                                    支持格式: MP4, AVI, MOV, MKV, WMV | 最大: 1GB
                                 </div>
                             </div>
                         )}

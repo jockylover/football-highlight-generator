@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from model.model_tuned import ImprovedCLIPShotDetector, ZeroShotCLIPShotDetector
 from data_processing.video_utils import SoccerNetDataset
+from config import clip_dirs
 import numpy as np
 from sklearn.metrics import roc_curve, auc, confusion_matrix, classification_report
 
@@ -33,11 +34,9 @@ def train_improved_model():
     # 加载 CLIP 预处理函数
     _, clip_preprocess = clip.load("ViT-B/32", device=device)
 
-    # 数据加载（与原始代码相同的路径）
-    train_shot_dir = r'E:\System Default\table\学习\大四下\paper\data\clips\train\shot'
-    train_non_shot_dir = r'E:\System Default\table\学习\大四下\paper\data\clips\train\non_shot'
-    valid_shot_dir = r'E:\System Default\table\学习\大四下\paper\data\clips\valid\shot'
-    valid_non_shot_dir = r'E:\System Default\table\学习\大四下\paper\data\clips\valid\non_shot'
+    # 数据加载
+    train_shot_dir, train_non_shot_dir = clip_dirs("train")
+    valid_shot_dir, valid_non_shot_dir = clip_dirs("valid")
 
     train_dataset = SoccerNetDataset(
         shot_dir=train_shot_dir,
@@ -84,7 +83,12 @@ def train_improved_model():
         {'params': fusion_params, 'lr': 1e-4}  # 融合层用较大学习率
     ], weight_decay=0.01)
 
-    criterion = BCEWithLogitsLoss(pos_weight=torch.tensor([2.0]).to(device))
+    # 按训练集实际正负比计算 pos_weight = n_neg / n_pos
+    n_pos = sum(1 for _, label in train_dataset.samples if label == 1)
+    n_neg = len(train_dataset.samples) - n_pos
+    pos_weight = (n_neg / n_pos) if n_pos > 0 else 1.0
+    print(f"类别分布: 正 {n_pos} / 负 {n_neg} -> pos_weight={pos_weight:.3f}")
+    criterion = BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight]).to(device))
     num_epochs = 15  # 减少epoch数，模型收敛可能更快
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs)
 
@@ -207,8 +211,7 @@ def evaluate_zero_shot_model():
     _, clip_preprocess = clip.load("ViT-B/32", device=device)
 
     # 加载验证数据
-    valid_shot_dir = r'E:\System Default\table\学习\大四下\paper\data\clips\valid\shot'
-    valid_non_shot_dir = r'E:\System Default\table\学习\大四下\paper\data\clips\valid\non_shot'
+    valid_shot_dir, valid_non_shot_dir = clip_dirs("valid")
 
     valid_dataset = SoccerNetDataset(
         shot_dir=valid_shot_dir,

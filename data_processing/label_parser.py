@@ -5,6 +5,8 @@ import subprocess
 import random
 from glob import glob
 
+from config import SOCCERNET_DIR, CLIPS_ROOT
+
 
 # ------------------- 工具函数 -------------------
 def parse_game_time(game_time_str):
@@ -94,8 +96,8 @@ def process_all_matches(root_dir, output_base_dir):
                 generate_negative_clips(half_video, shot_times, output_neg)
 
 
-# 测试运行
-process_all_matches(
-    root_dir="E:/System Default/table/paper/data/SoccerNet/train",
-    output_base_dir="../data/clips/train"
-)
+if __name__ == "__main__":
+    process_all_matches(
+        root_dir=str(SOCCERNET_DIR / "train"),
+        output_base_dir=str(CLIPS_ROOT / "train"),
+    )

@@ -40,6 +40,23 @@ logger = logging.getLogger(__name__)
 processing_status = {}
 cleanup_times = {}
 
+# 全局模型单例：避免每次上传都重新加载 CLIP + 权重（数百 MB / 数秒）
+_generator = None
+_generator_lock = threading.Lock()
+_inference_lock = threading.Lock()  # 串行化 GPU 推理，避免并发 OOM
+
+
+def get_generator():
+    """惰性加载并复用同一个 HighlightGenerator 实例。"""
+    global _generator
+    if _generator is None:
+        with _generator_lock:
+            if _generator is None:
+                logger.info("Loading HighlightGenerator (one-time)...")
+                _generator = HighlightGenerator()
+                logger.info("HighlightGenerator ready.")
+    return _generator
+
 # 配置
 MAX_FILE_SIZE = 1024 * 1024 * 1024  # 1GB
 ALLOWED_EXTENSIONS = {'mp4', 'avi', 'mov', 'mkv', 'wmv'}
@@ -212,8 +229,8 @@ def process_video_async(video_id, video_path):
             "progress": 10
         })
 
-        # 创建生成器
-        generator = HighlightGenerator()
+        # 复用全局生成器（首次调用时加载一次）
+        generator = get_generator()
 
         # 检测射门场景
         processing_status[video_id].update({
@@ -221,7 +238,9 @@ def process_video_async(video_id, video_path):
             "progress": 30
         })
 
-        shot_times = generator.detect_shots(video_path)
+        # 串行化 GPU 推理，避免多请求并发导致显存溢出
+        with _inference_lock:
+            shot_times = generator.detect_shots(video_path)
         logger.info(f"Detected {len(shot_times)} shot scenes for video {video_id}")
 
         # 生成集锦

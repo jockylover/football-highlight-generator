@@ -1,3 +1,5 @@
+import argparse
+
 import ffmpeg
 
 
@@ -15,8 +17,10 @@ def clip_video(input_file, output_file, start_time, end_time):
 
 
 if __name__ == "__main__":
-    input_video = r"E:\System Default\table\1_720p.mp4"
-    output_video = r"E:\System Default\table\11_720p.mp4"
-    start = 44 * 60
-    end = 45 * 60
-    clip_video(input_video, output_video, start, end)
+    parser = argparse.ArgumentParser(description="按起止时间(秒)截取视频片段")
+    parser.add_argument("input", help="输入视频路径")
+    parser.add_argument("output", help="输出视频路径")
+    parser.add_argument("start", type=float, help="起始时间(秒)")
+    parser.add_argument("end", type=float, help="结束时间(秒)")
+    args = parser.parse_args()
+    clip_video(args.input, args.output, args.start, args.end)

@@ -1,8 +1,16 @@
-import SoccerNet
 from SoccerNet.Downloader import SoccerNetDownloader
-mySoccerNetDownloader=SoccerNetDownloader(LocalDirectory=r"E:/System Default/table/paper/data/SoccerNet/train")
-mySoccerNetDownloader.password = "s0cc3rn3t"
-# mySoccerNetDownloader.downloadGames(files=["1_720p.mkv", "2_720p.mkv"], split=["valid"])
-# mySoccerNetDownloader.downloadGames(files=["1_720p.mkv", "2_720p.mkv"], split=["train","valid","test","challenge"])
-# mySoccerNetDownloader.downloadGames(files=["Labels-v2.json"], split=["train","valid","test"])
-mySoccerNetDownloader.downloadGames(files=["Labels-v2.json"], split=["train"])
+
+from config import SOCCERNET_DIR
+
+
+def main():
+    downloader = SoccerNetDownloader(LocalDirectory=str(SOCCERNET_DIR))
+    downloader.password = "s0cc3rn3t"  # SoccerNet 公开数据访问口令
+    # downloader.downloadGames(files=["1_720p.mkv", "2_720p.mkv"], split=["valid"])
+    # downloader.downloadGames(files=["1_720p.mkv", "2_720p.mkv"], split=["train","valid","test","challenge"])
+    # downloader.downloadGames(files=["Labels-v2.json"], split=["train","valid","test"])
+    downloader.downloadGames(files=["Labels-v2.json"], split=["train"])
+
+
+if __name__ == "__main__":
+    main()

@@ -9,6 +9,8 @@ class ImprovedCLIPShotDetector(nn.Module):
         super().__init__()
         self.device = device
         self.clip_model, _ = clip.load("ViT-B/32", device=device)
+        # CLIP 在 CUDA 上默认以 fp16 加载，会与 fp32 的 fusion_layer 不匹配；统一转 fp32
+        self.clip_model = self.clip_model.float()
 
         # 定义射门相关的文本描述
         self.shot_descriptions = [
@@ -137,6 +139,8 @@ class ZeroShotCLIPShotDetector(nn.Module):
         super().__init__()
         self.device = device
         self.clip_model, _ = clip.load("ViT-B/32", device=device)
+        # 统一转 fp32，避免 CUDA fp16 带来的类型/数值问题
+        self.clip_model = self.clip_model.float()
 
         # 更精确的文本提示
         self.shot_prompts = [

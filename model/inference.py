@@ -1,3 +1,5 @@
+import os
+import json
 import torch
 import cv2
 import subprocess
@@ -5,21 +7,60 @@ from model import FineTunedCLIP
 import clip
 from PIL import Image
 import ffmpeg
+from config import DEFAULT_MODEL_PATH
 
 
 class HighlightGenerator:
-    def __init__(self, model_path=r"E:\System Default\table\学习\大四下\paper\model\best_model_20250406-201708.pth"):
+    def __init__(self, model_path=DEFAULT_MODEL_PATH, batch_size=32):
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = FineTunedCLIP().to(self.device)
-        self.model.load_state_dict(torch.load(model_path))
+        # map_location 兼容 CPU/GPU；weights_only 规避 PyTorch 2.6 默认值变更告警（权重是 state_dict）
+        self.model.load_state_dict(
+            torch.load(model_path, map_location=self.device, weights_only=True)
+        )
         self.model.eval()
         self.preprocess = clip.load("ViT-B/32", device=self.device)[1]
+        self.batch_size = batch_size
+        # 推理阈值：优先读取与模型同目录的 best_threshold.json，否则回退到 0.5（与训练评估一致）
+        self.threshold = self._load_threshold(model_path, default=0.5)
 
-    def detect_shots(self, video_path, threshold=0.85, window_size=2.0):
+    @staticmethod
+    def _load_threshold(model_path, default=0.5):
+        thr_path = os.path.join(os.path.dirname(model_path), "best_threshold.json")
+        try:
+            with open(thr_path, "r", encoding="utf-8") as f:
+                return float(json.load(f)["threshold"])
+        except (OSError, KeyError, ValueError, TypeError):
+            return default
+
+    def detect_shots(self, video_path, threshold=None):
+        """按秒采样帧并分批推理，返回被判为射门的秒位列表。"""
+        if threshold is None:
+            threshold = self.threshold
+
         cap = cv2.VideoCapture(video_path)
         fps = cap.get(cv2.CAP_PROP_FPS)
         total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        if not fps or fps <= 0:
+            cap.release()
+            return []
+
         shot_times = []
+        batch_tensors = []
+        batch_secs = []
+
+        def flush():
+            if not batch_tensors:
+                return
+            batch = torch.stack(batch_tensors).to(self.device)
+            with torch.no_grad():
+                logits = self.model(batch).squeeze(-1)
+                probs = torch.sigmoid(logits)
+            for sec, p in zip(batch_secs, probs.tolist()):
+                if p > threshold:
+                    shot_times.append(sec)
+            batch_tensors.clear()
+            batch_secs.clear()
 
         for sec in range(0, int(total_frames / fps), 1):
             cap.set(cv2.CAP_PROP_POS_FRAMES, int(sec * fps))
@@ -27,20 +68,17 @@ class HighlightGenerator:
             if not ret:
                 break
 
-            # 预处理
+            # 预处理（攒批，统一上 GPU 做一次前向）
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            image = self.preprocess(Image.fromarray(frame)).unsqueeze(0).to(self.device)
+            batch_tensors.append(self.preprocess(Image.fromarray(frame)))
+            batch_secs.append(sec)
 
-            # 推理
-            with torch.no_grad():
-                output = self.model(image)
-            prob = torch.sigmoid(output).item()
+            if len(batch_tensors) >= self.batch_size:
+                flush()
 
-            if prob > threshold:
-                shot_times.append(sec)
-
+        flush()
         cap.release()
-        return shot_times
+        return sorted(shot_times)
 
     def merge_shot_times(self, shot_times, clip_duration):
         if not shot_times:

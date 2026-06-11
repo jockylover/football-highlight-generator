@@ -10,8 +10,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from model import FineTunedCLIP
 from data_processing.video_utils import SoccerNetDataset
+import json
 import numpy as np
-from sklearn.metrics import roc_curve, auc, confusion_matrix
+from sklearn.metrics import roc_curve, auc, confusion_matrix, precision_recall_curve
+from config import clip_dirs
 
 
 def train():
@@ -33,10 +35,8 @@ def train():
     _, clip_preprocess = clip.load("ViT-B/32", device=device)
 
     # 数据加载
-    train_shot_dir = r'E:\System Default\table\学习\大四下\paper\data\clips\train\shot'
-    train_non_shot_dir = r'E:\System Default\table\学习\大四下\paper\data\clips\train\non_shot'
-    valid_shot_dir = r'E:\System Default\table\学习\大四下\paper\data\clips\valid\shot'
-    valid_non_shot_dir = r'E:\System Default\table\学习\大四下\paper\data\clips\valid\non_shot'
+    train_shot_dir, train_non_shot_dir = clip_dirs("train")
+    valid_shot_dir, valid_non_shot_dir = clip_dirs("valid")
 
     train_dataset = SoccerNetDataset(
         shot_dir=train_shot_dir,
@@ -67,7 +67,12 @@ def train():
     # 训练准备
     model = FineTunedCLIP(freeze_clip=False, unfreeze_layers=2).to(device)
     optimizer = AdamW(model.parameters(), lr=1e-4, weight_decay=0.01)
-    criterion = BCEWithLogitsLoss(pos_weight=torch.tensor([2.0]).to(device))  # 处理类别不平衡
+    # 按训练集实际正负比计算 pos_weight = n_neg / n_pos，而非写死
+    n_pos = sum(1 for _, label in train_dataset.samples if label == 1)
+    n_neg = len(train_dataset.samples) - n_pos
+    pos_weight = (n_neg / n_pos) if n_pos > 0 else 1.0
+    print(f"类别分布: 正 {n_pos} / 负 {n_neg} -> pos_weight={pos_weight:.3f}")
+    criterion = BCEWithLogitsLoss(pos_weight=torch.tensor([pos_weight]).to(device))  # 处理类别不平衡
     num_epochs = 20
     scheduler = CosineAnnealingLR(optimizer, T_max=num_epochs)
 
@@ -96,7 +101,7 @@ def train():
             optimizer.step()
 
             # 计算准确率
-            predictions = (outputs > 0.5).float()
+            predictions = (torch.sigmoid(outputs) > 0.5).float()
             correct += (predictions == labels).sum().item()
             total += labels.size(0)
             total_loss += loss.item()
@@ -128,12 +133,12 @@ def train():
                 loss = criterion(outputs, labels)
 
                 # 计算准确率
-                predictions = (outputs > 0.5).float()
+                predictions = (torch.sigmoid(outputs) > 0.5).float()
                 valid_correct += (predictions == labels).sum().item()
                 valid_total += labels.size(0)
 
                 # 保存预测结果用于ROC曲线
-                all_preds.extend(outputs.cpu().numpy())
+                all_preds.extend(torch.sigmoid(outputs).cpu().numpy())
                 all_labels.extend(labels.cpu().numpy())
 
                 total_valid_loss += loss.item()
@@ -212,7 +217,23 @@ def train():
     plt.savefig(f"confusion_matrix_{timestamp}.png", bbox_inches='tight', transparent=True)
     plt.close()
 
+    # 在验证集上按 F1 选取最优判定阈值，写入 best_threshold.json 供推理加载
+    # 注意：all_preds 来自最后一个 epoch 的验证输出；如需与"最佳 loss"的模型严格对齐，
+    # 可在加载 best_model 后重新在验证集上评估再选阈值。
+    precision, recall, thresholds = precision_recall_curve(all_labels, all_preds)
+    if len(thresholds) > 0:
+        f1 = 2 * precision[:-1] * recall[:-1] / (precision[:-1] + recall[:-1] + 1e-8)
+        best_idx = int(np.argmax(f1))
+        best_threshold = float(thresholds[best_idx])
+        best_f1 = float(f1[best_idx])
+    else:
+        best_threshold, best_f1 = 0.5, 0.0
+    with open("best_threshold.json", "w", encoding="utf-8") as f:
+        json.dump({"threshold": best_threshold, "f1": best_f1, "timestamp": timestamp}, f)
+    print(f"最优验证阈值(F1): {best_threshold:.4f} (F1={best_f1:.4f}) -> best_threshold.json")
+
     print("Training completed and visualizations saved.")
+    print("提示: 将 best_model_*.pth 与 best_threshold.json 一并放到 MODEL_DIR，推理会自动读取阈值。")
 
 
 if __name__ == "__main__":
